@@ -1,16 +1,20 @@
 import { TurboModule, TurboModuleRegistry } from 'react-native';
 
 export interface Detection {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
   label: string;
-  confidence: number;
+  score: number;
+  boundingBox: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  };
 }
 
 export interface Spec extends TurboModule {
-  detectObjects(base64Image: string): Promise<Detection[]>;
+  detectObjects(imagePath: string, originalPhotoWidth: number, originalPhotoHeight: number): Promise<
+    Detection[]
+  >;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('NativeObjectDetectionModule');

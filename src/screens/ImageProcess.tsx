@@ -7,7 +7,7 @@ import {
     Alert,
     Image,
 } from 'react-native';
-import NativeTensorflowModule from '../../specs/NativeTensorflowModule';
+// import NativeTensorflowModule from '../../specs/NativeTensorflowModule';
 import { launchImageLibrary } from 'react-native-image-picker';
 import imagenetLabels from '../models/labels';
 
@@ -51,26 +51,26 @@ function ImageProcess(): React.JSX.Element {
 
                 if (base64data) {
                     Alert.alert('Running Inference', 'Please wait...');
-                    const result = await NativeTensorflowModule.runInference('mobilenet_v2_1.0_224_quant.tflite', base64data);
+                    // const result = await NativeTensorflowModule.runInference('mobilenet_v2_1.0_224_quant.tflite', base64data);
 
-                    const outputArray = base64ToUint8Array(result);
+                    // const outputArray = base64ToUint8Array(result);
 
-                    // Find top prediction
-                    let maxIndex = -1;
-                    let maxValue = -1;
-                    outputArray.forEach((val, idx) => {
-                        if (val > maxValue) {
-                            maxValue = val;
-                            maxIndex = idx;
-                        }
-                    });
+                    // // Find top prediction
+                    // let maxIndex = -1;
+                    // let maxValue = -1;
+                    // outputArray.forEach((val, idx) => {
+                    //     if (val > maxValue) {
+                    //         maxValue = val;
+                    //         maxIndex = idx;
+                    //     }
+                    // });
 
-                    // const label = imagenetLabels[maxIndex] || 'Unknown';
-                    const label = imagenetLabels[maxIndex] || `Unknown class (${maxIndex})`;
-                    const confidence = ((maxValue / 255) * 100).toFixed(2);
+                    // // const label = imagenetLabels[maxIndex] || 'Unknown';
+                    // const label = imagenetLabels[maxIndex] || `Unknown class (${maxIndex})`;
+                    // const confidence = ((maxValue / 255) * 100).toFixed(2);
 
-                    setInferenceResult(`Prediction: ${label}\nConfidence: ${confidence}%`);
-                    Alert.alert('Inference Complete', `Prediction: ${label}`);
+                    // setInferenceResult(`Prediction: ${label}\nConfidence: ${confidence}%`);
+                    // Alert.alert('Inference Complete', `Prediction: ${label}`);
                 } else {
                     Alert.alert('Error', 'Could not convert image to base64.');
                 }

@@ -3,20 +3,18 @@ import {
   StyleSheet,
   View,
   Text,
-  Platform,
   Alert,
   Dimensions,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import {
   Camera,
   useCameraDevice,
   useCameraPermission,
-  CameraCaptureError,
 } from 'react-native-vision-camera';
-import RNFS from 'react-native-fs'; // Import react-native-fs
-import NativeObjectDetectionModule, { Detection } from '../../specs/NativeObjectDetectionModule';
+import NativeObjectDetectionModule from '../../specs/NativeObjectDetectionModule';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -24,125 +22,141 @@ function ObjectDetectionScreen(): React.JSX.Element {
   const cameraRef = useRef<Camera>(null);
   const { hasPermission, requestPermission } = useCameraPermission();
   const [isCameraInitialized, setIsCameraInitialized] = useState(false);
-  const device = useCameraDevice('front'); // Use the 'back' camera device
+  const device = useCameraDevice('back');
 
-  const [detections, setDetections] = useState<Detection[]>([]);
+  const [detections, setDetections] = useState<any[]>([]);
   const [processingImage, setProcessingImage] = useState(false);
+  const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
+  const [originalPhotoDimensions, setOriginalPhotoDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
-    async function getAndRequestPermission() {
-      if (!hasPermission) {
-        const result = await requestPermission(); // Request permission directly from hook
-        if (!result) {
-          Alert.alert('Permission denied', 'Camera permission is required to use this feature.');
-        }
-      }
+    if (!hasPermission) {
+      requestPermission();
     }
-
-    getAndRequestPermission();
   }, [hasPermission, requestPermission]);
 
   const takePhotoAndDetect = useCallback(async () => {
-    if (cameraRef.current == null) {
-      console.warn('Camera is not ready yet!');
-      return;
-    }
-    if (processingImage) {
-      console.log('Already processing an image, please wait.');
-      return;
-    }
+    if (!cameraRef.current || processingImage) return;
 
     setProcessingImage(true);
-    setDetections([]); // Clear previous detections
+    setDetections([]);
+    setCapturedPhotoUri(null);
+    setOriginalPhotoDimensions(null);
 
     try {
-      // Capture a photo
       const photo = await cameraRef.current.takePhoto({
-        // qualityPrioritization: 'speed',
         flash: 'off',
         enableShutterSound: false,
-        // skipMetadata: true,
       });
 
-      // Read the photo file as base64
-      const base64Image = await RNFS.readFile(`file://${photo.path}`, 'base64');
+      const photoPathForNative = photo.path.startsWith('file://') ? photo.path.replace('file://', '') : photo.path;
+      const photoUriForDisplay = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      
+      setCapturedPhotoUri(photoUriForDisplay);
+      setOriginalPhotoDimensions({ width: photo.width, height: photo.height });
 
-      if (base64Image) {
-        // Call the native module for object detection
-        const results = await NativeObjectDetectionModule.detectObjects(base64Image);
-        console.log('Detection Results:', results);
-        setDetections(results);
-      } else {
-        console.warn("Could not get base64 image from photo.");
-      }
+      const results = await NativeObjectDetectionModule.detectObjects(photoPathForNative, photo.width, photo.height);
+      console.log('Detection Results:', results);
+      setDetections(results);
     } catch (e) {
-      if (e instanceof CameraCaptureError) {
-        switch (e.code) {
-          case 'capture/file-io-error':
-            Alert.alert('File I/O Error', 'Could not save photo to disk.');
-            break;
-        //   case 'capture/not-ready':
-        //     Alert.alert('Camera Not Ready', 'Camera is not yet ready to take photos.');
-        //     break;
-          default:
-            Alert.alert('Capture Error', `An error occurred while capturing photo: ${e.message}`);
-        }
-      } else {
-        Alert.alert('Processing Error', `Failed to process image: ${e}`);
-      }
-      console.error('Failed to take photo or detect objects:', e);
+      console.error('Detection error:', e);
+      Alert.alert('Error', 'Failed to detect objects.');
     } finally {
       setProcessingImage(false);
     }
   }, [processingImage]);
 
+  const renderBoundingBoxes = () => {
+    if (!capturedPhotoUri || !originalPhotoDimensions || detections.length === 0) {
+      return null;
+    }
+
+    const aspectRatio = originalPhotoDimensions.width / originalPhotoDimensions.height;
+    let imageDisplayWidth = screenWidth;
+    let imageDisplayHeight = screenWidth / aspectRatio;
+
+    if (imageDisplayHeight > screenHeight) {
+      imageDisplayHeight = screenHeight;
+      imageDisplayWidth = screenHeight * aspectRatio;
+    }
+
+    const offsetX = (screenWidth - imageDisplayWidth) / 2;
+    const offsetY = (screenHeight - imageDisplayHeight) / 2;
+
+    return detections.map((detection, index) => {
+      const { boundingBox, label, score } = detection;
+      
+      const modelToOriginalScaleX = originalPhotoDimensions.width / 300;
+      const modelToOriginalScaleY = originalPhotoDimensions.height / 300;
+
+      const originalToDisplayScaleX = imageDisplayWidth / originalPhotoDimensions.width;
+      const originalToDisplayScaleY = imageDisplayHeight / originalPhotoDimensions.height;
+      
+      const scaleX = modelToOriginalScaleX * originalToDisplayScaleX;
+      const scaleY = modelToOriginalScaleY * originalToDisplayScaleY;
+
+      const left = boundingBox.left * scaleX + offsetX;
+      const top = boundingBox.top * scaleY + offsetY;
+      const width = (boundingBox.right - boundingBox.left) * scaleX;
+      const height = (boundingBox.bottom - boundingBox.top) * scaleY;
+
+      return (
+        <View
+          key={index}
+          style={[
+            styles.boundingBox,
+            {
+              left,
+              top,
+              width,
+              height,
+            },
+          ]}
+        >
+          <Text style={styles.label}>
+            {label} ({Math.round(score * 100)}%)
+          </Text>
+        </View>
+      );
+    });
+  };
+
   if (!hasPermission) {
     return <Text style={styles.permissionText}>Requesting Camera Permission...</Text>;
   }
 
-  if (device == null) {
+  if (!device) {
     return <Text style={styles.permissionText}>No camera device found.</Text>;
   }
 
   return (
     <View style={styles.container}>
-      <Camera
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        device={device}
-        isActive={true}
-        photo={true} // Enable photo capture
-        onInitialized={() => setIsCameraInitialized(true)}
-      />
+      {!capturedPhotoUri ? (
+        <Camera
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          device={device}
+          isActive={true}
+          photo={true}
+          onInitialized={() => setIsCameraInitialized(true)}
+        />
+      ) : (
+        <Image
+          source={{ uri: capturedPhotoUri }}
+          style={styles.capturedPhoto}
+          resizeMode="contain"
+        />
+      )}
 
       {isCameraInitialized && (
         <View style={styles.overlay}>
-          {detections.map((detection, index) => (
-            <View
-              key={index}
-              style={[
-                styles.boundingBox,
-                {
-                  // Scale normalized coordinates (0-1) to screen dimensions
-                  left: detection.x * screenWidth,
-                  top: detection.y * screenHeight,
-                  width: detection.w * screenWidth,
-                  height: detection.h * screenHeight,
-                },
-              ]}
-            >
-              <Text style={styles.label}>
-                {detection.label} ({Math.round(detection.confidence * 100)}%)
-              </Text>
-            </View>
-          ))}
+          {renderBoundingBoxes()}
 
           <View style={styles.bottomControls}>
             <Text style={styles.infoText}>
               Status: {processingImage ? 'Processing...' : 'Ready'}
             </Text>
             {processingImage && <ActivityIndicator size="large" color="#00ff00" />}
-
             <TouchableOpacity
               style={styles.captureButton}
               onPress={takePhotoAndDetect}
@@ -213,6 +227,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  capturedPhoto: {
+    ...StyleSheet.absoluteFillObject,
+    width: screenWidth,
+    height: screenHeight,
   },
 });
 
