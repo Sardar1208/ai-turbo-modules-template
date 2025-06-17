@@ -5,7 +5,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 type RootStackParamList = {
     Home: undefined;
     TfjsImplementation: undefined;
-    JsiImplementation: undefined;
+    image_classification: undefined;
+    object_detection: undefined;
 };
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -34,8 +35,17 @@ const HomeScreen = ({ navigation }: Props) => {
 
                 <TouchableOpacity
                     style={[styles.button, styles.jsiButton]}
-                    onPress={() => navigation.navigate('JsiImplementation')}>
-                    <Text style={styles.buttonTitle}>Screen 2: JSI Native Module</Text>
+                    onPress={() => navigation.navigate('image_classification')}>
+                    <Text style={styles.buttonTitle}>Screen 2: image classification</Text>
+                    <Text style={styles.buttonDescription}>
+                        Uses a Vision Camera Frame Processor with a C++ JSI module to run a TensorFlow Lite model natively.
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.button, styles.jsiButton]}
+                    onPress={() => navigation.navigate('object_detection')}>
+                    <Text style={styles.buttonTitle}>Screen 3: object detection</Text>
                     <Text style={styles.buttonDescription}>
                         Uses a Vision Camera Frame Processor with a C++ JSI module to run a TensorFlow Lite model natively.
                     </Text>
