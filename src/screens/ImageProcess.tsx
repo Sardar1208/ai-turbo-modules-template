@@ -3,15 +3,16 @@ import {
     StyleSheet,
     Text,
     View,
-    Button,
     Alert,
     Image,
+    TouchableOpacity,
+    ActivityIndicator,
+    ScrollView,
 } from 'react-native';
 import NativeTensorflowModule from '../../specs/NativeTensorflowModule';
 import { launchImageLibrary } from 'react-native-image-picker';
 import imagenetLabels from '../models/labels';
 
-// Helper to decode base64 output to Uint8Array
 function base64ToUint8Array(base64: string): Uint8Array {
     const binaryString = atob(base64);
     const len = binaryString.length;
@@ -22,17 +23,10 @@ function base64ToUint8Array(base64: string): Uint8Array {
     return bytes;
 }
 
-// // ImageNet labels (first index is usually a dummy/background class for MobileNet)
-// const imagenetLabels = [
-//     "background",
-//     "tench", "goldfish", "great white shark", "tiger shark", "hammerhead", "electric ray", "stingray", "cock", "hen", "ostrich", "cat",
-//     // ... truncated: you should include all 1001 labels here.
-//     "bolete", "ear", "toilet tissue"
-// ];
-
 function ImageProcess(): React.JSX.Element {
     const [inferenceResult, setInferenceResult] = useState<string>('');
     const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
 
     const runTFLiteInference = async () => {
         if (!selectedImageUri) {
@@ -50,12 +44,12 @@ function ImageProcess(): React.JSX.Element {
                 const base64data = reader.result?.toString().split(',')[1];
 
                 if (base64data) {
-                    Alert.alert('Running Inference', 'Please wait...');
+                    setIsLoading(true);
                     const result = await NativeTensorflowModule.runInference('mobilenet_v2_1.0_224_quant.tflite', base64data);
+                    setIsLoading(false);
 
                     const outputArray = base64ToUint8Array(result);
 
-                    // Find top prediction
                     let maxIndex = -1;
                     let maxValue = -1;
                     outputArray.forEach((val, idx) => {
@@ -65,12 +59,9 @@ function ImageProcess(): React.JSX.Element {
                         }
                     });
 
-                    // const label = imagenetLabels[maxIndex] || 'Unknown';
                     const label = imagenetLabels[maxIndex] || `Unknown class (${maxIndex})`;
                     const confidence = ((maxValue / 255) * 100).toFixed(2);
-
-                    setInferenceResult(`Prediction: ${label}\nConfidence: ${confidence}%`);
-                    Alert.alert('Inference Complete', `Prediction: ${label}`);
+                    setInferenceResult(`🧠 ${label}\n📈 Confidence: ${confidence}%`);
                 } else {
                     Alert.alert('Error', 'Could not convert image to base64.');
                 }
@@ -81,6 +72,7 @@ function ImageProcess(): React.JSX.Element {
             };
 
         } catch (e: any) {
+            setIsLoading(false);
             Alert.alert('Inference Error', e.message || 'Unknown error');
             console.error('TFLite Inference Error:', e);
         }
@@ -100,63 +92,104 @@ function ImageProcess(): React.JSX.Element {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>TFLite Turbo Module Demo</Text>
+        <ScrollView contentContainerStyle={styles.container}>
+            <Text style={styles.title}>🧪 TFLite Demo</Text>
 
-            <Button title="Pick Image" onPress={pickImage} />
+            <TouchableOpacity style={styles.button} onPress={pickImage}>
+                <Text style={styles.buttonText}>📷 Pick an Image</Text>
+            </TouchableOpacity>
+
             {selectedImageUri && (
                 <Image source={{ uri: selectedImageUri }} style={styles.imagePreview} />
             )}
 
-            <Button
-                title="Run TFLite Inference"
+            <TouchableOpacity
+                style={[styles.button, !selectedImageUri && styles.buttonDisabled]}
                 onPress={runTFLiteInference}
-                disabled={!selectedImageUri}
-            />
+                disabled={!selectedImageUri || isLoading}
+            >
+                <Text style={styles.buttonText}>▶️ Run Inference</Text>
+            </TouchableOpacity>
 
-            <Text style={styles.resultText}>{inferenceResult}</Text>
+            {isLoading && <ActivityIndicator size="large" color="#333" style={{ marginTop: 20 }} />}
+
+            {inferenceResult !== '' && (
+                <View style={styles.resultBox}>
+                    <Text style={styles.resultText}>{inferenceResult}</Text>
+                </View>
+            )}
+
             <Text style={styles.note}>
-                Note: This uses MobileNet v2 (quantized) and a simplified output interpretation.
+                Using MobileNet v2 (quantized model) with simplified interpretation.
             </Text>
-        </View>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
+        flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#f0f0f0',
+        padding: 24,
+        backgroundColor: '#fafafa',
     },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        color: '#333',
+        fontSize: 26,
+        fontWeight: '700',
+        color: '#222',
+        marginBottom: 30,
+    },
+    button: {
+        backgroundColor: '#4a90e2',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 10,
+        marginVertical: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    buttonDisabled: {
+        backgroundColor: '#aaa',
+    },
+    buttonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
     imagePreview: {
-        width: 200,
-        height: 200,
-        resizeMode: 'contain',
-        marginVertical: 20,
+        width: 240,
+        height: 240,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#ccc',
+        borderColor: '#ddd',
+        marginVertical: 20,
+        resizeMode: 'cover',
+    },
+    resultBox: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        marginTop: 20,
+        width: '100%',
     },
     resultText: {
-        marginTop: 20,
         fontSize: 16,
         fontWeight: '500',
+        color: '#333',
         textAlign: 'center',
-        color: '#222',
     },
     note: {
-        marginTop: 30,
         fontSize: 12,
         color: '#888',
+        marginTop: 40,
         textAlign: 'center',
-    }
+    },
 });
 
 export default ImageProcess;
